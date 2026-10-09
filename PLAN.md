@@ -44,6 +44,7 @@ Needs: loader. Delivers to: centrality table and correlations to streams 4 and 6
 - ✅ Modularity of the metadata partition (class / ward role) and of the Louvain optimum
 - ✅ Spectral radius λ1 and the SIS threshold 1/λ1; algebraic connectivity
 - ✅ Degree-distribution fits: power law vs exponential on the pmf and on the CCDF, plus Var/E[D] against the ER expectation (`fit_degree_distribution`)
+- ✅ Strength-distribution fits (contact minutes per node), same method (`results/strength_fit_<ds>.csv`, `figures/strength_distribution_<ds>.png`)
 - ✅ Centrality table per node: degree, strength, betweenness, closeness, eigenvector (unweighted and weighted), k-shell (`centralities`)
 - ✅ Spearman correlation matrix between centralities (`results/centrality_correlations_<ds>.csv`)
 - ✅ Configuration model (stub matching, loops and duplicates removed) (`f2f.nulls.configuration_model`)
@@ -130,4 +131,6 @@ Needs: engine from stream 4; centralities from stream 2; predictions from stream
 - Schools: class structure far beyond chance (modularity z ≈ 74 primary, ≈ 151 high school against the rewired null).
 - Hospital: ward roles are not communities; role modularity is negative and degree assortativity is negative (nurses bridge patients).
 - Degree distributions: exponential tail on the CCDF, Var/E[D] between 5 and 10, so neither scale-free nor Erdős-Rényi.
+- Strength (contact minutes) is far more heterogeneous than degree: max/mean 2.5 to 5 and an exponential tail with R² 0.92 to 0.98, still not a power law.
+- Heterogeneity lives in contact time, not contact count: the busiest person has 2 to 2.5x the mean degree but 2.5 to 5x the mean strength. Immunisation rankings should use strength or weighted centralities rather than plain degree (prediction for RQ2 and RQ4).
 - Tiny worlds: mean hopcount 1.6 to 2.2, diameter 3 to 4. SIS thresholds 1/λ1: 0.027 (hospital), 0.012 (primary), 0.024 (high school).

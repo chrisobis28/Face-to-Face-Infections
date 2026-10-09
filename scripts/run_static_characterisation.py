@@ -2,13 +2,14 @@
 
 For every dataset:
   results/static_metrics_<ds>.csv       lecture-1 metrics of the real aggregated graph
-  results/degree_fit_<ds>.csv           power-law vs exponential fits of Pr[D = k]
+  results/degree_fit_<ds>.csv           power-law vs exponential fits of the degree distribution
+  results/strength_fit_<ds>.csv         same fits for node strength (contact minutes)
   results/centralities_<ds>.csv         one row per node (used by streams 4 and 6)
   results/centrality_correlations_<ds>.csv  Spearman correlation between centralities
   results/assortativity_range.csv       min / real / max assortativity reachable by rewiring
   results/null_<kind>_<ds>.csv          metrics of each null realisation
   results/zscores_<kind>_<ds>.csv       real vs null, with z and empirical p
-  figures/degree_distribution_<ds>.png
+  figures/degree_distribution_<ds>.png, figures/strength_distribution_<ds>.png
 Across datasets:
   results/static_metrics_all.csv, results/zscores_all.csv
   figures/rq1_static_vs_null_<kind>.png real metric vs null-model band, one panel per metric
@@ -50,8 +51,9 @@ PLOT_METRICS = [
 ]
 
 
-def degree_figure(key: str, G, fit: dict) -> None:
-    deg = np.array([d for _, d in G.degree()])
+def degree_figure(key: str, G, fit: dict, values=None, name: str = "degree", unit: str = "") -> None:
+    """CCDF with both fits for degree (default) or any per-node quantity, e.g. strength."""
+    deg = np.array([d for _, d in G.degree()]) if values is None else np.asarray(values)
     ks, counts = np.unique(deg[deg > 0], return_counts=True)
     p = counts / counts.sum()
     ccdf = 1 - np.cumsum(p) + p
@@ -62,20 +64,21 @@ def degree_figure(key: str, G, fit: dict) -> None:
     axes[0].loglog(ks, ccdf, "s", ms=4, label="Pr[D >= k] (data)")
     axes[0].loglog(ks, np.exp(b_pl) * ks ** a_pl, "-", color="C3",
                    label=f"power law, tau={fit['ccdf_powerlaw_exponent']:.2f}, R2={fit['ccdf_powerlaw_r2']:.2f}")
-    axes[0].set_xlabel("degree k")
-    axes[0].set_ylabel("Pr[D >= k]")
-    axes[0].set_title(f"{key}: log-log scale", fontsize=9)
+    axes[0].set_xlabel(f"{name} k{unit}")
+    axes[0].set_ylabel("Pr[X >= k]")
+    axes[0].set_title(f"{key} {name}: log-log scale", fontsize=9)
     axes[0].legend(fontsize=7)
     axes[1].semilogy(ks, ccdf, "s", ms=4, label="Pr[D >= k] (data)")
     axes[1].semilogy(ks, np.exp(b_ex + a_ex * ks), "-", color="C3",
                      label=f"exponential, rate={fit['ccdf_exponential_rate']:.3f}, R2={fit['ccdf_exponential_r2']:.2f}")
-    axes[1].semilogy(ks, p, "o", ms=3, alpha=0.4, color="grey", label="Pr[D = k] (noisy at this N)")
-    axes[1].set_xlabel("degree k")
-    axes[1].set_title(f"log-linear scale  (best: {fit['best']})", fontsize=9)
+    if values is None:
+        axes[1].semilogy(ks, p, "o", ms=3, alpha=0.4, color="grey", label="Pr[D = k] (noisy at this N)")
+    axes[1].set_xlabel(f"{name} k{unit}")
+    axes[1].set_title(f"log-linear scale  (best: {fit['best']}, Var/E = {fit['degree_dispersion_var_over_mean']:.1f})", fontsize=9)
     axes[1].legend(fontsize=7)
     fig.tight_layout()
     FIG_DIR.mkdir(exist_ok=True)
-    fig.savefig(FIG_DIR / f"degree_distribution_{key}.png", dpi=150)
+    fig.savefig(FIG_DIR / f"{name}_distribution_{key}.png", dpi=150)
     plt.close(fig)
 
 
@@ -161,12 +164,19 @@ def main() -> None:
         G = views.aggregate(contacts, nodes)
         real = sm.network_metrics(G, seed=args.seed)
         fit = sm.fit_degree_distribution([d for _, d in G.degree()])
+        # strength in minutes of contact; the heavy-tail hypothesis of RQ1 is about strength, not degree
+        strength_min = np.array([s for _, s in G.degree(weight="weight")]) / 60.0
+        fit_s = sm.fit_degree_distribution(np.round(strength_min).astype(int))
         cent = sm.centralities(G)
         cache.save_table(pd.Series(real, name=key).to_frame(), f"static_metrics_{key}")
         cache.save_table(pd.Series(fit, name=key).to_frame(), f"degree_fit_{key}")
+        cache.save_table(pd.Series(fit_s, name=key).to_frame(), f"strength_fit_{key}")
         cache.save_table(cent, f"centralities_{key}")
         cache.save_table(sm.centrality_correlations(cent), f"centrality_correlations_{key}")
         degree_figure(key, G, fit)
+        degree_figure(key, G, fit_s, values=np.round(strength_min).astype(int), name="strength", unit=" (min)")
+        print(f"   strength (min): max/mean = {strength_min.max()/strength_min.mean():.1f}, Var/E = {fit_s['degree_dispersion_var_over_mean']:.1f}, "
+              f"CCDF best = {fit_s['best']} (power R2={fit_s['ccdf_powerlaw_r2']:.2f}, exp R2={fit_s['ccdf_exponential_r2']:.2f})")
         rng = assortativity_range(key, G, seed=args.seed)
         all_rho.append(rng)
         print(f"   assortativity range by rewiring: [{rng['rho_min']:.2f}, {rng['rho_max']:.2f}], real {rng['rho_real']:.2f}")
