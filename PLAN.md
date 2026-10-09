@@ -29,34 +29,32 @@ Needs: nothing. Delivers to: everyone.
 - ✅ Aggregated weighted graph, weight = contact seconds, count = windows (`f2f.views.aggregate`)
 - ✅ Per-day splits that never overlap (`f2f.views.split_days`, `day_table`)
 - ✅ Result cache with schema validation (`f2f.cache.save_result`, `load_result`, `save_table`)
-- ✅ Acceptance script (`scripts/check_data.py`)
+- ✅ Acceptance script (`scripts/check_data.py`): all three datasets pass
+- ✅ Shared matplotlib style file (`figures/f2f.mplstyle`)
 - ✅ README with setup, data contract and citations
-- ⬜ Shared matplotlib style file
-- ⬜ Sensitivity harness over beta, gamma and bin size (needs the engine from stream 4)
-- ⬜ Confirm the primary-school absolute dates (file counts seconds from midnight; 1-2 Oct 2009 is assumed, the day split is correct either way)
+- ⬜ Sensitivity harness over beta, gamma and bin size (week 2, needs the engine from stream 4)
+
+Known assumption: the primary-school file counts seconds from midnight without a date; 1-2 Oct 2009 is assumed. The day split is correct either way.
 
 ## Stream 2: Static characterisation and static null models (RQ1, static half)
 
-Needs: loader. Delivers to: centrality table to streams 4 and 6; spectral radius to stream 4.
+Needs: loader. Delivers to: centrality table and correlations to streams 4 and 6; spectral radius to stream 4.
 
-- ✅ Lecture-1 metrics on the aggregated graph: N, L, density, degree mean/variance/dispersion, clustering, transitivity, giant component, mean hopcount, diameter, assortativity (`f2f.static_metrics.network_metrics`)
+- ✅ Lecture-1 metrics on the aggregated graph: N, L, density, degree mean / variance / dispersion, clustering, transitivity, giant component, mean hopcount, diameter, assortativity (`f2f.static_metrics.network_metrics`)
 - ✅ Modularity of the metadata partition (class / ward role) and of the Louvain optimum
 - ✅ Spectral radius λ1 and the SIS threshold 1/λ1; algebraic connectivity
-- ✅ Degree-distribution fits: power law vs exponential on the pmf and on the CCDF, plus Var/E[D] dispersion against the ER expectation (`fit_degree_distribution`)
+- ✅ Degree-distribution fits: power law vs exponential on the pmf and on the CCDF, plus Var/E[D] against the ER expectation (`fit_degree_distribution`)
 - ✅ Centrality table per node: degree, strength, betweenness, closeness, eigenvector (unweighted and weighted), k-shell (`centralities`)
+- ✅ Spearman correlation matrix between centralities (`results/centrality_correlations_<ds>.csv`)
 - ✅ Configuration model (stub matching, loops and duplicates removed) (`f2f.nulls.configuration_model`)
 - ✅ Degree-preserving rewiring with exact degrees (`degree_preserving_rewiring`)
-- ✅ Rewiring toward a target assortativity (`rewire_to_assortativity`)
-- ✅ Null ensembles and z-scores with empirical p-values (`null_ensemble`, `zscores`)
+- ✅ Rewiring toward a target assortativity and the lecture-1 assortativity-range figure (`rewire_to_assortativity`, `figures/assortativity_range.png`)
+- ✅ Null ensembles, z-scores with empirical p-values and effect sizes (`null_ensemble`, `zscores`)
 - ✅ Run script for all datasets, 100 realisations per null (`scripts/run_static_characterisation.py`)
-- ✅ Outputs: `results/static_metrics_*.csv`, `degree_fit_*.csv`, `centralities_*.csv`, `null_*`, `zscores_*`
-- ✅ Figures: `figures/rq1_static_vs_null_{rewired,configuration}.png`, `figures/degree_distribution_*.png`
+- ✅ Outputs: `results/static_metrics_*.csv`, `degree_fit_*.csv`, `centralities_*.csv`, `null_*`, `zscores_*`, `assortativity_range.csv`
+- ✅ Figures: `figures/rq1_static_vs_null_{rewired,configuration}.png` (2 x 4 panels, effect-size labels), `degree_distribution_*.png`, `assortativity_range.png`
 - ✅ Documented: configuration model loses 10 to 40 % of links on these dense graphs; the rewired null is the default for z-scores
-- ⬜ Assortativity-range figure (min / real / max assortativity by rewiring, lecture 1)
-- ⬜ Write out the centrality correlation matrix (`centrality_correlations` exists, not called)
-- ⬜ Z-score bar chart (the band figure is hard to read when z > 100)
-- ⬜ Per-day aggregated graphs and metrics (how stable is the structure day to day)
-- ⬜ Optional: maximum-likelihood power-law fit as a cross-check of the regression fits
+- ⬜ Per-day aggregated graphs and metrics (day-to-day stability, useful for stream 5's calibration story)
 
 ## Stream 3: Temporal characterisation, temporal null models and prediction (RQ1, temporal half)
 

@@ -4,12 +4,15 @@ For every dataset:
   results/static_metrics_<ds>.csv       lecture-1 metrics of the real aggregated graph
   results/degree_fit_<ds>.csv           power-law vs exponential fits of Pr[D = k]
   results/centralities_<ds>.csv         one row per node (used by streams 4 and 6)
+  results/centrality_correlations_<ds>.csv  Spearman correlation between centralities
+  results/assortativity_range.csv       min / real / max assortativity reachable by rewiring
   results/null_<kind>_<ds>.csv          metrics of each null realisation
   results/zscores_<kind>_<ds>.csv       real vs null, with z and empirical p
   figures/degree_distribution_<ds>.png
 Across datasets:
   results/static_metrics_all.csv, results/zscores_all.csv
-  figures/rq1_static_vs_null.png        real metric vs null-model band, one panel per metric
+  figures/rq1_static_vs_null_<kind>.png real metric vs null-model band, one panel per metric
+  figures/assortativity_range.png       lecture-1 assortativity range figure
 
 Usage:
   python scripts/run_static_characterisation.py --datasets hospital --n-null 20   # quick
@@ -34,6 +37,7 @@ import pandas as pd  # noqa: E402
 from f2f import cache, datasets, nulls, static_metrics as sm, views  # noqa: E402
 
 FIG_DIR = datasets.ROOT / "figures"
+plt.style.use(FIG_DIR / "f2f.mplstyle")
 PLOT_METRICS = [
     "L",
     "clustering",
@@ -72,6 +76,35 @@ def degree_figure(key: str, G, fit: dict) -> None:
     fig.tight_layout()
     FIG_DIR.mkdir(exist_ok=True)
     fig.savefig(FIG_DIR / f"degree_distribution_{key}.png", dpi=150)
+    plt.close(fig)
+
+
+def assortativity_range(key: str, G, seed: int = 0, max_steps: int = 30000) -> dict:
+    """Lecture 1: given the degree sequence, how far can assortativity be pushed by rewiring?"""
+    rho = float(sm.nx.degree_assortativity_coefficient(G))
+    lo = nulls.rewire_to_assortativity(G, target_rho=-1.0, max_steps=max_steps, seed=seed)
+    hi = nulls.rewire_to_assortativity(G, target_rho=1.0, max_steps=max_steps, seed=seed)
+    return {
+        "dataset": key,
+        "rho_min": float(sm.nx.degree_assortativity_coefficient(lo)),
+        "rho_real": rho,
+        "rho_max": float(sm.nx.degree_assortativity_coefficient(hi)),
+    }
+
+
+def assortativity_figure(rng_df: pd.DataFrame) -> None:
+    fig, ax = plt.subplots(figsize=(4.5, 3.4))
+    x = np.arange(len(rng_df))
+    ax.vlines(x, rng_df["rho_min"], rng_df["rho_max"], color="grey", lw=3, label="reachable by rewiring")
+    ax.plot(x, rng_df["rho_real"], "o", color="C3", label="real")
+    ax.axhline(0, color="k", lw=0.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels(rng_df["dataset"], rotation=20, ha="right")
+    ax.set_ylabel("degree assortativity")
+    ax.set_title("Assortativity given the degree sequence", fontsize=10)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(FIG_DIR / "assortativity_range.png", dpi=150)
     plt.close(fig)
 
 
@@ -121,7 +154,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    all_metrics, all_z = [], []
+    all_metrics, all_z, all_rho = [], [], []
     for key in args.datasets:
         t0 = time.time()
         contacts, nodes = datasets.load_contacts(key)
@@ -132,7 +165,11 @@ def main() -> None:
         cache.save_table(pd.Series(real, name=key).to_frame(), f"static_metrics_{key}")
         cache.save_table(pd.Series(fit, name=key).to_frame(), f"degree_fit_{key}")
         cache.save_table(cent, f"centralities_{key}")
+        cache.save_table(sm.centrality_correlations(cent), f"centrality_correlations_{key}")
         degree_figure(key, G, fit)
+        rng = assortativity_range(key, G, seed=args.seed)
+        all_rho.append(rng)
+        print(f"   assortativity range by rewiring: [{rng['rho_min']:.2f}, {rng['rho_max']:.2f}], real {rng['rho_real']:.2f}")
         all_metrics.append(pd.Series(real, name=key))
         print(f"[{key}] N={real['N']} L={real['L']} <k>={real['mean_degree']:.1f} C={real['clustering']:.3f} "
               f"E[H]={real['mean_hopcount']:.2f} rho={real['assortativity']:.3f} Q_groups={real['modularity_groups']:.3f} "
@@ -151,6 +188,9 @@ def main() -> None:
                   + f"  ({time.time()-t1:.1f}s)")
 
     cache.save_table(pd.concat(all_metrics, axis=1), "static_metrics_all")
+    rho_df = pd.DataFrame(all_rho)
+    cache.save_table(rho_df.set_index("dataset"), "assortativity_range")
+    assortativity_figure(rho_df)
     z_all = pd.concat(all_z, ignore_index=True)
     cache.save_table(z_all, "zscores_all")
     for kind in args.kinds:

@@ -1,0 +1,14 @@
+# Shared figure style: import with  plt.style.use(FIG_DIR / "f2f.mplstyle")
+figure.dpi: 150
+savefig.dpi: 150
+font.size: 9
+axes.titlesize: 10
+axes.labelsize: 9
+legend.fontsize: 8
+xtick.labelsize: 8
+ytick.labelsize: 8
+axes.spines.top: False
+axes.spines.right: False
+axes.grid: True
+grid.alpha: 0.25
+lines.markersize: 5
