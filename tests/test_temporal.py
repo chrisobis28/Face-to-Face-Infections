@@ -47,6 +47,11 @@ class TemporalNullTests(unittest.TestCase):
         shuffled = tn.link_shuffle(contacts, seed=5, swaps_per_contact=20)
         tn.assert_link_shuffle_invariants(contacts, shuffled)
 
+    def test_episode_time_shuffle_invariants(self):
+        contacts = small_contacts()
+        shuffled = tn.episode_time_shuffle(contacts, seed=6)
+        tn.assert_episode_time_shuffle_invariants(contacts, shuffled)
+
 
 class PredictionTests(unittest.TestCase):
     def test_self_driven_weights_recent_activity_more(self):

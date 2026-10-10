@@ -65,6 +65,7 @@ def temporal_figure(plot_data: dict) -> None:
     styles = {
         "real": ("C3", "-"),
         "time shuffled": ("C0", "--"),
+        "episode shuffled": ("0.25", "-."),
         "link shuffled": ("C2", ":"),
     }
     for col, key in enumerate(datasets_order):
@@ -128,15 +129,18 @@ def main() -> None:
         representatives = {"real": contacts}
         for label, kind, shuffle, check in [
             ("time shuffled", "time_shuffled", tn.time_shuffle, tn.assert_time_shuffle_invariants),
+            (
+                "episode shuffled", "episode_time_shuffled",
+                tn.episode_time_shuffle, tn.assert_episode_time_shuffle_invariants,
+            ),
             ("link shuffled", "link_shuffled", tn.link_shuffle, tn.assert_link_shuffle_invariants),
         ]:
             null_rows = []
             for run in range(args.n_null):
-                shuffled = shuffle(
-                    contacts,
-                    seed=args.seed + run,
-                    swaps_per_contact=args.swaps_per_contact,
-                )
+                kwargs = {"seed": args.seed + run}
+                if kind != "episode_time_shuffled":
+                    kwargs["swaps_per_contact"] = args.swaps_per_contact
+                shuffled = shuffle(contacts, **kwargs)
                 check(contacts, shuffled)
                 summary = tm.temporal_summary(shuffled, node_ids, args.bin_s, args.max_lag)
                 null_rows.append({"run": run, **summary})

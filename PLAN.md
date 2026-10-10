@@ -9,7 +9,7 @@ Legend: ✅ done in this MR · ⬜ open. Tick items as PRs land.
 
 Shared contracts (agreed on day one, see README):
 - ✅ Contact table: `t, i, j, abs_time, day`; node table with `group`
-- ✅ Network version names: `real`, `time_shuffled`, `link_shuffled`, `aggregated`, `surrogate`
+- ✅ Network version names: `real`, `time_shuffled`, `episode_time_shuffled`, `link_shuffled`, `aggregated`, `surrogate`
 - ✅ Result cache row: `dataset, version, beta, gamma, seed, run, outcome, value` (`f2f.cache`)
 - ⬜ Simulator signature: `simulate(contacts, seeds, beta, gamma, immunised, removed_contacts, runs, rng_seed)` (stream 4 to implement)
 - ⬜ Figure style file under `figures/`
@@ -66,6 +66,7 @@ Needs: loader. Delivers to: shuffles and activity potentials to stream 5; predic
 - ✅ Activity potential per node (undirected contact-involvement share) and its distribution
 - ✅ Jaccard similarity and link-activity autocorrelation as a function of lag (memory decay)
 - ✅ Time-shuffle null (random pair-time assignment, keeps the aggregated weighted graph) in contact-table format
+- ✅ Episode-preserving time-shuffle null (moves intact meetings across active periods)
 - ✅ Link-shuffle null (node-activity-preserving temporal endpoint swaps) in contact-table format
 - ✅ Temporal metrics on shuffled sequences, z-scores
 - ✅ Self-driven memory model (lecture 3) predicting next-day contacts from previous days

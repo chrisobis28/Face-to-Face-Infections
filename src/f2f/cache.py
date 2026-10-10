@@ -5,7 +5,7 @@ streams without asking anyone. One parquet file per experiment under results/.
 
 Required columns (the contract agreed at kick-off):
     dataset   str    hospital | primary_school | high_school
-    version   str    real | time_shuffled | link_shuffled | aggregated | surrogate
+    version   str    real | time_shuffled | episode_time_shuffled | link_shuffled | aggregated | surrogate
     beta      float  per-window transmission probability
     gamma     float  per-window recovery probability
     seed      int    seed node id (or -1 when not seed-specific)
@@ -24,7 +24,10 @@ from .datasets import ROOT
 
 RESULTS_DIR = ROOT / "results"
 REQUIRED = ["dataset", "version", "beta", "gamma", "seed", "run", "outcome", "value"]
-VERSIONS = {"real", "time_shuffled", "link_shuffled", "aggregated", "surrogate"}
+VERSIONS = {
+    "real", "time_shuffled", "episode_time_shuffled", "link_shuffled",
+    "aggregated", "surrogate",
+}
 
 
 def validate(df: pd.DataFrame) -> pd.DataFrame:

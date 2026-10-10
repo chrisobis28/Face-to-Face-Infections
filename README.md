@@ -28,8 +28,9 @@ python scripts/check_data.py    # stream 1 acceptance check (checksums, day tabl
 
 One row = one 20-second window in which `i` and `j` were in proximity.
 
-Network versions are named strings used everywhere: `real`, `time_shuffled`, `link_shuffled`,
-`aggregated`, `surrogate`. Simulation results go to `results/<experiment>.parquet` through
+Network versions are named strings used everywhere: `real`, `time_shuffled`,
+`episode_time_shuffled`, `link_shuffled`, `aggregated`, `surrogate`. Simulation results go to
+`results/<experiment>.parquet` through
 `f2f.cache.save_result` with the row format `dataset, version, beta, gamma, seed, run, outcome, value`.
 
 Progress per stream and per task: see [PLAN.md](PLAN.md).
@@ -81,16 +82,18 @@ hopcount; its `L` z-score shows the loss. It is kept for comparison with the lec
 
 ```bash
 python scripts/run_temporal_characterisation.py --datasets hospital --n-null 3  # quick check
-python scripts/run_temporal_characterisation.py --n-null 20                    # full run, ~11 min
+python scripts/run_temporal_characterisation.py --n-null 20                    # full run, ~13 min
 python -m unittest discover -s tests                                          # acceptance tests
 ```
 
 The time shuffle preserves every pair's number of 20-second contacts and every timestamp's contact
-count, but randomises their ordering. The link shuffle preserves every timestamp's contact count and
-every node's total contact involvement, but randomises partners. Both reject self-loops and duplicate
-pair-windows. Memory is measured in 5-minute bins within each calendar day, so nights do not create
-artificially long gaps. Because contacts are undirected, activity potential is a node's share of all
-contact involvements, not a fictitious share of "initiated" contacts.
+count, but randomises their ordering. The episode-time shuffle instead moves intact meetings across
+active periods, preserving each pair and meeting duration but not exact per-timestamp volume. The
+link shuffle preserves every timestamp's contact count and every node's total contact involvement,
+but randomises partners. All nulls reject self-loops and duplicate pair-windows. Memory is measured
+in 5-minute bins within each calendar day, so nights do not create artificially long gaps. Because
+contacts are undirected, activity potential is a node's share of all contact involvements, not a
+fictitious share of "initiated" contacts.
 
 The self-driven predictor follows [Zou, Ceria and Wang
 (2023)](https://doi.org/10.1007/s41109-023-00597-w): recent binary link activity is weighted by
