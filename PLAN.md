@@ -61,17 +61,17 @@ Needs: loader. Delivers to: centrality table and correlations to streams 4 and 6
 
 Needs: loader. Delivers to: shuffles and activity potentials to stream 5; predicted contacts to stream 6.
 
-- ⬜ Inter-contact time distribution and burstiness per dataset
-- ⬜ Contact duration distribution
-- ⬜ Activity potential per node (share of initiated contacts) and its distribution
-- ⬜ Jaccard similarity and link-activity autocorrelation as a function of lag (memory decay)
-- ⬜ Time-shuffle null (permute timestamps, keeps the aggregated graph) in the contact-table format
-- ⬜ Link-shuffle null in the contact-table format
-- ⬜ Temporal metrics on the shuffled sequences, z-scores
-- ⬜ Self-driven memory model (lecture 3) predicting next-day contacts from previous days
-- ⬜ Prediction-quality evaluation with a baseline, within the school week
-- ⬜ Predicted next-day contact list written to the cache for stream 6
-- ⬜ RQ1 temporal figure
+- ✅ Inter-contact time distribution and burstiness per dataset
+- ✅ Contact duration distribution
+- ✅ Activity potential per node (undirected contact-involvement share) and its distribution
+- ✅ Jaccard similarity and link-activity autocorrelation as a function of lag (memory decay)
+- ✅ Time-shuffle null (random pair-time assignment, keeps the aggregated weighted graph) in contact-table format
+- ✅ Link-shuffle null (node-activity-preserving temporal endpoint swaps) in contact-table format
+- ✅ Temporal metrics on shuffled sequences, z-scores
+- ✅ Self-driven memory model (lecture 3) predicting next-day contacts from previous days
+- ✅ Prediction-quality evaluation with a frequency baseline, within the school week
+- ✅ Predicted next-day contact list written to the cache for stream 6
+- ✅ RQ1 temporal figure
 
 ## Stream 4: Spreading engine and node roles (RQ2)
 

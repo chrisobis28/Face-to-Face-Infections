@@ -33,6 +33,7 @@ Network versions are named strings used everywhere: `real`, `time_shuffled`, `li
 `f2f.cache.save_result` with the row format `dataset, version, beta, gamma, seed, run, outcome, value`.
 
 Progress per stream and per task: see [PLAN.md](PLAN.md).
+Final Stream 3 numbers and their interpretation: see [STREAM3_RESULTS.md](STREAM3_RESULTS.md).
 
 ## Layout
 
@@ -43,8 +44,12 @@ src/f2f/
   cache.py           stream 1  result cache row format
   static_metrics.py  stream 2  lecture-1 metrics, degree fits, centralities
   nulls.py           stream 2  configuration model, degree-preserving rewiring, z-scores
+  temporal_metrics.py stream 3 contact episodes, burstiness, activity and memory
+  temporal_nulls.py  stream 3  invariant-preserving time and link shuffles
+  prediction.py      stream 3  self-driven temporal-link prediction
 scripts/
-  download_data.sh, check_data.py, run_static_characterisation.py
+  download_data.sh, check_data.py, run_static_characterisation.py,
+  run_temporal_characterisation.py
 results/             generated tables (git-ignored), figures/ tracked
 ```
 
@@ -71,3 +76,25 @@ Two null models are provided. **Use `rewired` (double-edge swaps) for z-scores**
 degree exactly. The `configuration` model (stub matching, then self-loops and duplicates removed, as
 in lecture 2) loses 10 to 40 % of the links on these dense graphs, which biases clustering and
 hopcount; its `L` z-score shows the loss. It is kept for comparison with the lecture.
+
+## Stream 3: temporal characterisation and prediction (RQ1, temporal half)
+
+```bash
+python scripts/run_temporal_characterisation.py --datasets hospital --n-null 3  # quick check
+python scripts/run_temporal_characterisation.py --n-null 20                    # full run, ~11 min
+python -m unittest discover -s tests                                          # acceptance tests
+```
+
+The time shuffle preserves every pair's number of 20-second contacts and every timestamp's contact
+count, but randomises their ordering. The link shuffle preserves every timestamp's contact count and
+every node's total contact involvement, but randomises partners. Both reject self-loops and duplicate
+pair-windows. Memory is measured in 5-minute bins within each calendar day, so nights do not create
+artificially long gaps. Because contacts are undirected, activity potential is a node's share of all
+contact involvements, not a fictitious share of "initiated" contacts.
+
+The self-driven predictor follows [Zou, Ceria and Wang
+(2023)](https://doi.org/10.1007/s41109-023-00597-w): recent binary link activity is weighted by
+exponential memory. We adapt its next-snapshot scores to rank contacts for each later day. The decay
+parameter is selected on day 0 and compared with an unweighted frequency baseline over the same
+history window. Only links observed before the predicted day are candidates. Results include
+candidate coverage so unseen future links are not silently ignored.
