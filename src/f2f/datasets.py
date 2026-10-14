@@ -95,8 +95,12 @@ def raw_available(key: str) -> bool:
 
 def load_nodes(key: str) -> pd.DataFrame:
     spec = DATASETS[key]
+    pattern = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
     nodes = _read_netzschleuder_csv(RAW_DIR / spec.folder / "nodes.csv")
-    nodes = nodes.drop(columns=[c for c in nodes.columns if c.startswith("_")])
+    xy = nodes["_pos"].str.findall(pattern).apply(lambda v: [float(i) for i in v])
+    nodes[["x", "y"]] = pd.DataFrame(xy.tolist(), index=nodes.index)
+    nodes = nodes.drop(columns="_pos")
+    # nodes = nodes.drop(columns=[c for c in nodes.columns if c.startswith("_")])
     nodes = nodes.rename(columns={"index": "node", "id": "sensor_id", spec.group_col: "group"})
     nodes["group"] = nodes["group"].astype(str)
     return nodes.set_index("node").sort_index()
