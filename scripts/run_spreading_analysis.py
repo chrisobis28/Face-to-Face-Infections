@@ -12,6 +12,7 @@ from itertools import product
 from f2f import datasets, views  # noqa: E402
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.lines import Line2D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -19,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 FIG_DIR = datasets.ROOT / "figures" / "spreading"
 PROCESSED_DIR = datasets.ROOT / "data" / "spreading"
-MODELS = ["SIR", "SIS"]
+MODELS = ["SIR"]
 HS = "high_school"
 PS = "primary_school"
 ZKH = "hospital"
@@ -34,17 +35,53 @@ COLORS = {"S": "tab:blue", "I": "tab:red", "R": "tab:green"}
 DATASET_LABELS = {HS: "High school", PS: "Primary school", ZKH: "Hospital"}
 VARIANT_LABELS = {"aggr": "Aggregated network", "temporal": "Temporal network"}
 SECONDS_PER_DAY = 86400
+METHODS = ["discrete", "ode"]
+WINDOW_S = 20 
 
-def result_path(model: str, key: str, variant: str):
-    return PROCESSED_DIR / f"{model}_{key}_discrete_{variant}.csv"
 
-def run_one(variant: str, model: str, data: dict, **params) -> pd.DataFrame:
+def result_path(model: str, key: str, variant: str, method: str = "discrete"):
+    return PROCESSED_DIR / f"{model}_{key}_{method}_{variant}.csv"
+
+def compute_k_mean(variant: str, data: dict) -> tuple[float, int]:
+    """returns (k_mean, N) to pass to the ode function"""
+    if variant == "aggr":
+        G = data["graph"]
+        N = G.number_of_nodes()
+        # same normalization in discrete(): A / A.max()
+        # we always use the weighted graph, so return a weighted version of the average 
+        A = nx.to_scipy_sparse_array(G, weight="weight", format="csr")
+        A = A / A.max()
+        return float(A.sum(axis=1).mean()), N
+    elif variant == "temporal":
+        contacts, N = data["contacts"], len(data["nodes"])
+        w = (contacts["t"] - contacts["t"].min()) // WINDOW_S
+        n_windows = int(w.max()) + 1
+        # every row is a chance to infect in both directions, so * 2. 
+        return 2 * len(contacts) / (N * n_windows), N
+    raise ValueError(f"Unknown variant: {variant}")
+
+def run_one_discrete(variant: str, model: str, data: dict, **params) -> pd.DataFrame:
     if variant == "aggr":
         res = discrete(graph = data["graph"], model=model, **params)
     elif variant == "temporal":
-        res = simulate_temporal(contacts=data["contacts"], nodes=data["nodes"], model=model, **params)
+        res = simulate_discrete_temporal(contacts=data["contacts"], nodes=data["nodes"], model=model, **params)
     else:
-        raise ValueError(f"Onbekende variant: {variant}")
+        raise ValueError(f"Unknown variant: {variant}")
+    return res
+
+def run_one_ode(variant: str, model: str, data: dict, **params) -> pd.DataFrame:
+    k_mean, N = compute_k_mean(variant, data)
+    if variant == "aggr":
+        t_max = params["timesteps"]
+    else:  # temporal: t_max = number of windows 
+        c = data["contacts"]
+        t_max = int((c["t"].max() - c["t"].min()) // WINDOW_S) + 1
+    res = simulate_ode(model=model, beta=params["beta"], gamma=params["gamma"],
+                       k_mean=k_mean, i0=params["n_seeds"] / N,
+                       t_max=t_max, n_points=t_max)
+    if variant == "temporal":   # windows -> seconds, so _prepare() can convert to days 
+        res.index = pd.Index(res.index * WINDOW_S, name="t_s")
+    print(f"   k_mean={k_mean:.4g}, R0={params['beta'] * k_mean / params['gamma']:.3g}")
     return res
 
 def load_data(key: str) -> dict:
@@ -52,20 +89,25 @@ def load_data(key: str) -> dict:
     return {"contacts": contacts, "nodes": nodes, "graph": views.aggregate(contacts, nodes)}
 
 def run_all(keys=DATASET_KEYS, models=MODELS, variants=VARIANTS, overwrite=True):
-    """all combinations of dataset x model x variant. writes all to csv."""
+    """all combinations of dataset x methods x variant. writes all to csv."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     results = {}
     for key in keys:
         data = load_data(key)  
-        for model, variant in product(models, variants):
-            path = result_path(model, key, variant)
+        for model, variant, method in product(models, variants, METHODS):
+            path = result_path(model, key, variant, method)
             if path.exists() and not overwrite:
                 print(f"skip {path.name}")
                 continue
             print(f"run  {path.name}")
-            res = run_one(variant, model, data, **PARAMS[variant])
+            if method == "discrete": 
+                res = run_one_discrete(variant, model, data, **PARAMS[variant])
+            elif method == "ode": 
+                res = run_one_ode(variant, model, data, **PARAMS[variant])
+            else:
+                raise ValueError("Not a valid calculation method, choose ode or discrete")
             res.to_csv(path)
-            results[(key, model, variant)] = res
+            results[(key, model, variant, method)] = res
     return results
 
 def _prepare(res: pd.DataFrame) -> pd.DataFrame:
@@ -81,7 +123,7 @@ def _prepare(res: pd.DataFrame) -> pd.DataFrame:
     df[comps] = df[comps].div(df[comps].sum(axis=1), axis=0)
     return df
 
-def _plot_panel(ax, df: pd.DataFrame, comps) -> None:
+def _plot_panel(ax, df: pd.DataFrame, comps, ode = None) -> None:
     multiple_runs = df["run"].nunique() > 1
     for c in comps:
         if multiple_runs:                                   # separate runs thin lines 
@@ -89,6 +131,8 @@ def _plot_panel(ax, df: pd.DataFrame, comps) -> None:
                 ax.plot(g["time"], g[c], color=COLORS[c], alpha=0.12, lw=0.8)
         mean = df.groupby("time")[c].mean()                 # gemiddelde dik
         ax.plot(mean.index, mean.values, color=COLORS[c], lw=2, label=c)
+        if ode is not None: 
+            ax.plot(ode["time"], ode[c], color = COLORS[c], lw = 2, ls="--")
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
 
@@ -103,12 +147,14 @@ def plot_results(results: dict, models=MODELS, keys=DATASET_KEYS, variants=VARIA
         for r, key in enumerate(keys):
             for c, variant in enumerate(variants):
                 ax = axes[r, c]
-                res = results.get((key, model, variant))
+                res = results.get((key, model, variant, "discrete"))
+                ode = results.get((key, model, variant, "ode"))
+
                 if res is None:
                     ax.text(0.5, 0.5, "geen data", ha="center", va="center", transform=ax.transAxes)
                     ax.set_axis_off()
                     continue
-                _plot_panel(ax, _prepare(res), comps)
+                _plot_panel(ax, _prepare(res), comps, ode=_prepare(ode) if ode is not None else None)
                 parameters = PARAMS[variant]
                 txt = f"β = {parameters['beta']:g}, γ = {parameters['gamma']:g}, n_seeds = {parameters['n_seeds']:g}"
                 if variant == "temporal":   # 1 timestep = 20 s
@@ -122,6 +168,7 @@ def plot_results(results: dict, models=MODELS, keys=DATASET_KEYS, variants=VARIA
                 if r == len(keys) - 1:
                     ax.set_xlabel("time (days)" if variant == "temporal" else "timestep")
         handles, labels = axes[0, 0].get_legend_handles_labels()
+        handles.append(Line2D([0], [0], color="k", ls="--", lw=2)); labels.append("ODE (mean-field)")
         fig.legend(handles, labels, loc="upper right", frameon=False)
         fig.suptitle(f"{model}-model", fontsize=14)
         fig.tight_layout(rect=(0, 0, 0.97, 0.97))

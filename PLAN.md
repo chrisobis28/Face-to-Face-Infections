@@ -8,6 +8,7 @@ hospital first, then the primary school, then the high school.
 Legend: ✅ done in this MR · ⬜ open. Tick items as PRs land.
 
 Shared contracts (agreed on day one, see README):
+
 - ✅ Contact table: `t, i, j, abs_time, day`; node table with `group`
 - ✅ Network version names: `real`, `time_shuffled`, `episode_time_shuffled`, `link_shuffled`, `aggregated`, `surrogate`
 - ✅ Result cache row: `dataset, version, beta, gamma, seed, run, outcome, value` (`f2f.cache`)
@@ -78,9 +79,9 @@ Needs: loader. Delivers to: shuffles and activity potentials to stream 5; predic
 
 Needs: loader; centralities and λ1 from stream 2. Delivers to: engine to streams 5 and 6 by day 5.
 
-- ⬜ Vectorised discrete-time SIR on the contact table with the agreed signature, fixed seeds
+- ✅Vectorised discrete-time SIR on the contact table with the agreed signature, fixed seeds
 - ⬜ Periodic looping of the recording when the outbreak outlasts it
-- ⬜ Test against the analytical SIR on a complete graph
+- ✅ Test against the analytical SIR on a complete graph
 - ⬜ SIS on the aggregated weighted graph; empirical threshold vs 1/λ1
 - ⬜ All-seeds sweep: every seed node, 200 runs (100 on the high school), several beta values
 - ⬜ Role measures per node: final size as seed, time to 10 % prevalence, probability of being infected
@@ -113,19 +114,19 @@ Needs: engine from stream 4; centralities from stream 2; predictions from stream
 
 ## Milestones
 
-| Dates | Milestone | Status |
-| --- | --- | --- |
-| 9-10 Oct | Kick-off and contracts | ✅ contracts in README; names still to assign |
-| 11-13 Oct | Feedback-meeting results: loader, RQ1 static tables, engine prototype, calibration prototype | ✅ loader and RQ1 static; ⬜ engine and calibration prototypes |
-| 13 Oct | Feedback deck (5-10 min) | ⬜ |
-| 12-16 Oct | Feedback meeting; RQs frozen afterwards | ⬜ |
-| 16-22 Oct | Full runs on all datasets | ⬜ |
-| 22 Oct | Checkpoint: prediction-based immunisation in or out; extra dataset or not | ⬜ |
-| 22-26 Oct | Surrogate interventions and sensitivity | ⬜ |
-| 26 Oct | Figure freeze | ⬜ |
-| 26-30 Oct | Slide deck and two timed rehearsals | ⬜ |
-| before the interview | Slides on Brightspace, repo tagged | ⬜ |
-| 26 Oct - 2 Nov | Final interview | ⬜ |
+| Dates                | Milestone                                                                                    | Status                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 9-10 Oct             | Kick-off and contracts                                                                       | ✅ contracts in README; names still to assign                  |
+| 11-13 Oct            | Feedback-meeting results: loader, RQ1 static tables, engine prototype, calibration prototype | ✅ loader and RQ1 static; ⬜ engine and calibration prototypes |
+| 13 Oct               | Feedback deck (5-10 min)                                                                     | ⬜                                                             |
+| 12-16 Oct            | Feedback meeting; RQs frozen afterwards                                                      | ⬜                                                             |
+| 16-22 Oct            | Full runs on all datasets                                                                    | ⬜                                                             |
+| 22 Oct               | Checkpoint: prediction-based immunisation in or out; extra dataset or not                    | ⬜                                                             |
+| 22-26 Oct            | Surrogate interventions and sensitivity                                                      | ⬜                                                             |
+| 26 Oct               | Figure freeze                                                                                | ⬜                                                             |
+| 26-30 Oct            | Slide deck and two timed rehearsals                                                          | ⬜                                                             |
+| before the interview | Slides on Brightspace, repo tagged                                                           | ⬜                                                             |
+| 26 Oct - 2 Nov       | Final interview                                                                              | ⬜                                                             |
 
 ## First findings (stream 2, for the feedback deck)
 

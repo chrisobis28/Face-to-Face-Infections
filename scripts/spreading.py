@@ -1,8 +1,7 @@
 """
-First implementation of basic SIR / SIS spreading (continuous and discrete) on the networks. 
+First implementation of basic, DETERMINISTIC (not stochastic) SIR spreading (continuous and discrete) on the networks (aggr & temporal). 
 Dynamics of epidemiological spread. 
 - SIR = susceptible, infected, recovered. Immunity once recovered. 
-- SIS = susceptible, infected, susceptible. No immunity. 
 Continuous uses ODEs to solve for continous spreading, discrete assigns labels at each timestep. 
 beta = rate of infection.  
 gamma = rate of recovery. 
@@ -15,8 +14,10 @@ from scipy.integrate import solve_ivp
 
 S, I, R = 0, 1, 2
 
-def discrete(graph, model = "SIR", beta = 0.05, gamma = 0.02, n_seeds = 5, timesteps=500, seed = None):
-  """Returns a dataframe with number of S, I, R nodes at each time step"""
+def discrete(graph, model = "SIR", beta = 0.05, gamma = 0.02, n_seeds = 5, timesteps=500, seed = 0):
+  """Returns a dataframe with number of S, I, R nodes at each time step, on the AGGREGATE network 
+  Uses the actual graph structure and connections to determine who infects who. 
+  A non-fixed seeds makes this somewhat stochastic"""
   rng = np.random.default_rng(seed)
   nodes = list(graph.nodes)
   idx = {n: k for k,n in enumerate(nodes)}
@@ -27,11 +28,7 @@ def discrete(graph, model = "SIR", beta = 0.05, gamma = 0.02, n_seeds = 5, times
 
   state = np.zeros(len(nodes))
   state[rng.choice(len(nodes), n_seeds, replace=False)] = I #seed nodes that are infected 
-  if model =="SIR": 
-    recovered_to = R
-  elif model =="SIS":
-    recovered_to = S
-  else: 
+  if model !="SIR": 
     raise ValueError(f"unknown model type: {model}")
 
   history = []
@@ -45,25 +42,26 @@ def discrete(graph, model = "SIR", beta = 0.05, gamma = 0.02, n_seeds = 5, times
     new_i = (state == S) & (rng.random(len(nodes)) < prob_inf)
     new_r = (state == I) & (rng.random(len(nodes)) < gamma)
     state[new_i] = I
-    state[new_r] = recovered_to
+    state[new_r] = R
   return pd.DataFrame(history, columns=["S", "I", "R"]).rename_axis("t")
 
-def simulate_temporal(contacts, nodes, model="SIR", beta=0.1, gamma=0.001,
-                      n_seeds=5, time_col="t", window_s=20, seed=None):
+def simulate_discrete_temporal(contacts, nodes, model="SIR", beta=0.1, gamma=0.001,
+                      n_seeds=5, time_col="t", window_s=20, seed=0):
     """discrete simulation on the temporal network, not aggregated 
     every time step is a contactwindow of window_s seconds. Only pairs (i,j) that had contact in this window are able to infect. 
     beta and gamma are rates of infection/recovery within each window!! (20s, so small window. )
+        Returns a dataframe with number of S, I, R nodes at each time step
+      Uses the actual graph structure and connections to determine who infects who. 
+      A non-fixed seeds makes this somewhat stochastic. 
+      Show this compared to the discrete on aggregate to show what the temporal dimension changes in the spreading --> aka is temporal contact info relevant? 
     """
     rng = np.random.default_rng(seed)
     ids = list(nodes.index)
     idx = {n: k for k, n in enumerate(ids)}
 
-    if model =="SIR": 
-      recovered_to = R
-    elif model =="SIS":
-      recovered_to = S
-    else: 
-      raise ValueError(f"unknown model type: {model}")
+    if model != "SIR":
+        raise ValueError(f"unknown model type: {model}")
+
  
     state = np.zeros(len(ids))
     state[rng.choice(len(ids), n_seeds, replace=False)] = I
@@ -88,36 +86,37 @@ def simulate_temporal(contacts, nodes, model="SIR", beta=0.1, gamma=0.001,
  
         new_r = (state == I) & (rng.random(len(ids)) < gamma)
         state[new_i] = I
-        state[new_r] = recovered_to
+        state[new_r] = R
  
     t = np.arange(len(history)) * window_s
     return pd.DataFrame(history, columns=["S", "I", "R"], index=pd.Index(t, name="t_s"))
   
 def simulate_ode(model="SIR", beta=0.05, gamma=0.02, k_mean=10.0,
-                 i0=0.01, t_max=500, n_points=500):
+                 i0=0.01, t_max=500, n_points=500): #i0 = nseeds/N where N = number of nodes 
     """ODEs, S + I + R = 1
  
     SIR:  dS/dt = -beta*<k>*S*I
           dI/dt =  beta*<k>*S*I - gamma*I
           dR/dt =  gamma*I
-    SIS:  dS/dt = -beta*<k>*S*I + gamma*I
-          dI/dt =  beta*<k>*S*I - gamma*I
  
     dt = 1, beta chance of infection per contact 
     R0 = beta*<k>/gamma.
+    This is the reference model, and does not use the graph structure for information. This is a 'baseline' showing what the infection would look like in mean-field homogenous mixing of nodes (aka every node has on avg. the same number of contacts with random other nodes).
+    Uses kmean = avg number of contacts to define the spreading. 
+    This kmean can be calculated over the aggregate network or per time window (temporal). The kmean is the only thing that changes. 
+    IMPORTANT calculate kmean before calling this function, nothing is calculated inline.  
     """
+    if model !="SIR": 
+      raise ValueError(f"unknown model type: {model}")
     b = beta * k_mean
  
     def sir(t, y):
         s, i, r = y
         return [-b * s * i, b * s * i - gamma * i, gamma * i]
  
-    def sis(t, y):
-        s, i, r = y
-        return [-b * s * i + gamma * i, b * s * i - gamma * i, 0.0]
- 
     t_eval = np.linspace(0, t_max, n_points)
-    sol = solve_ivp(sir if model == "SIR" else sis, (0, t_max),
+
+    sol = solve_ivp(sir, (0, t_max),
                     [1 - i0, i0, 0.0], t_eval=t_eval)
     return pd.DataFrame(sol.y.T, index=pd.Index(sol.t, name="t"), columns=["S", "I", "R"])
 
