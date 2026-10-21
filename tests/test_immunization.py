@@ -36,6 +36,18 @@ class SirTests(unittest.TestCase):
         np.testing.assert_array_equal(base.inf, none.inf)
 
 
+    def test_blocks_equal_separate_calls(self):
+        c = chain((0, 20))
+        masks = [np.zeros((30, 4), bool), np.zeros((30, 4), bool)]
+        masks[1][:, 3] = True
+        for simulate in (sir.simulate, sir.simulate_aggregated):
+            together = simulate(c, NODES, seeds=1, beta=0.5, gamma=0.05, immunised=np.vstack(masks), runs=30,
+                                rng_seed=3, max_loops=4, blocks=2).split(2)
+            for m, ep in zip(masks, together):
+                alone = simulate(c, NODES, seeds=1, beta=0.5, gamma=0.05, immunised=m, runs=30, rng_seed=3, max_loops=4)
+                np.testing.assert_array_equal(alone.inf, ep.inf)
+
+
 class StrategyTests(unittest.TestCase):
     def test_every_strategy_returns_k_distinct_nodes(self):
         c = chain((0, 20))

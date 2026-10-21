@@ -16,7 +16,10 @@ probability `gamma` per window. Three differences, all for speed or for longer o
 
 Every window draws the same amount of randomness whatever the state, so two calls with
 the same `rng_seed` share random numbers (common random numbers): differences between
-immunisation strategies are not run-to-run noise.
+immunisation strategies are not run-to-run noise. `blocks=B` simulates B scenarios side by
+side (rows b*runs .. (b+1)*runs - 1 of the seed / immunisation masks) with the random
+numbers of `runs` runs repeated in every block: identical to B separate calls, but the
+per-window Python cost is paid once, which is what makes the strategy grid fast.
 
 `simulate_aggregated` runs the same process on the time-aggregated network: link (i, j)
 carries its c_ij contacts spread evenly over the recording, so the only thing removed is
@@ -71,6 +74,11 @@ class Epidemic:
         hit[hit >= NEVER] = np.nan
         return (hit + 1) / step
 
+    def split(self, blocks: int) -> list["Epidemic"]:
+        """One Epidemic per block of a `blocks=B` simulation."""
+        return [Epidemic(i, r, self.period, self.still_active)
+                for i, r in zip(np.split(self.inf, blocks), np.split(self.rec, blocks))]
+
     def summary(self) -> dict[str, np.ndarray]:
         grid, prev = self.prevalence()
         return {
@@ -82,14 +90,15 @@ class Epidemic:
         }
 
 
-def _start(n: int, seeds, immunised, runs: int, gamma: float, rng_seed: int):
+def _start(n: int, seeds, immunised, runs: int, gamma: float, rng_seed: int, blocks: int = 1):
     """Initial times and pre-drawn recovery delays. `seeds` is an int k (k random seeds per
     run, drawn among non-immunised nodes), an array of node indices used in every run, or a
-    (runs, N) boolean mask. `immunised` is None, an index array (same in every run) or a
-    (runs, N) boolean mask."""
+    (runs * blocks, N) boolean mask. `immunised` is None, an index array (same in every run)
+    or a (runs * blocks, N) boolean mask."""
     rng = np.random.default_rng(rng_seed)
-    delay = rng.geometric(gamma, size=(runs, n)).astype(np.int64)
-    order = np.argsort(rng.random((runs, n)), axis=1)  # per-run seed candidates, CRN-friendly
+    delay = np.tile(rng.geometric(gamma, size=(runs, n)).astype(np.int64), (blocks, 1))
+    order = np.tile(np.argsort(rng.random((runs, n)), axis=1), (blocks, 1))  # per-run seed candidates
+    runs *= blocks
     imm = np.zeros((runs, n), dtype=bool)
     if immunised is not None:
         immunised = np.asarray(immunised)
@@ -140,32 +149,42 @@ def simulate(
     rng_seed: int = 0,
     max_loops: int = 30,
     prepared=None,
+    blocks: int = 1,
 ) -> Epidemic:
     """SIR on the temporal network. Node order is `nodes.index`; pass `prepared` (the output
     of `windows_of`) to skip regrouping the contacts on repeated calls."""
     a, b, uw, bounds, period = prepared if prepared is not None else windows_of(contacts, nodes.index)
-    rng, delay, inf, rec = _start(len(nodes), seeds, immunised, runs, gamma, rng_seed)
+    rng, delay, inf, rec = _start(len(nodes), seeds, immunised, runs, gamma, rng_seed, blocks)
     for loop in range(max_loops):
         offset = loop * period
         for k in range(len(uw)):
             w = uw[k] + offset
-            if k % 256 == 0 and not (rec >= w).any():
-                return Epidemic(inf, rec, period, 0.0)
+            if k % 256 == 0:
+                alive = _alive(inf, rec, w)
+                if len(alive) == 0:
+                    return Epidemic(inf, rec, period, 0.0)
             s, e = bounds[k], bounds[k + 1]
             pa, pb = a[s:e], b[s:e]
-            ia, ra, ib, rb = inf[:, pa], rec[:, pa], inf[:, pb], rec[:, pb]
-            u = rng.random((runs, 2 * (e - s)))
+            ia, ra = inf[np.ix_(alive, pa)], rec[np.ix_(alive, pa)]
+            ib, rb = inf[np.ix_(alive, pb)], rec[np.ix_(alive, pb)]
+            u = rng.random((runs, 2 * (e - s)))[alive % runs]  # drawn every window: common random numbers
             hit_b = (ia < w) & (w <= ra) & (ib == NEVER) & (u[:, : e - s] < beta)
             hit_a = (ib < w) & (w <= rb) & (ia == NEVER) & (u[:, e - s :] < beta)
             if hit_a.any() or hit_b.any():
                 rb_, cb_ = np.nonzero(hit_b)
                 ra_, ca_ = np.nonzero(hit_a)
-                rows = np.r_[rb_, ra_]
+                rows = alive[np.r_[rb_, ra_]]
                 cols = np.r_[pb[cb_], pa[ca_]]
                 inf[rows, cols] = w
                 rec[rows, cols] = w + delay[rows, cols]
     end = max_loops * period
-    return Epidemic(inf, rec, period, float((rec >= end).any(axis=1).mean()))
+    return Epidemic(inf, rec, period, len(_alive(inf, rec, end)) / len(inf))
+
+
+def _alive(inf: np.ndarray, rec: np.ndarray, w: int) -> np.ndarray:
+    """Rows that can still change: someone infectious now or later, and someone susceptible.
+    Finished rows are skipped; their recovery times are already fixed, so this is exact."""
+    return np.flatnonzero((rec >= w).any(axis=1) & (inf == NEVER).any(axis=1))
 
 
 def contact_matrix(contacts: pd.DataFrame, node_index: pd.Index) -> np.ndarray:
@@ -189,6 +208,7 @@ def simulate_aggregated(
     rng_seed: int = 0,
     max_loops: int = 30,
     step: int = WINDOWS_PER_HOUR,
+    blocks: int = 1,
 ) -> Epidemic:
     """SIR on the aggregated weighted network, in steps of `step` windows. During a step a
     susceptible i is infected with probability 1 - (1 - beta)^x, x = sum_j c_ij / period *
@@ -196,18 +216,21 @@ def simulate_aggregated(
     nodes when contacts are spread evenly in time. Infection lands at the end of the step."""
     c = contact_matrix(contacts, nodes.index)
     period = int((contacts["t"].max() - contacts["t"].min()) // WINDOW_S) + 1
-    rng, delay, inf, rec = _start(len(nodes), seeds, immunised, runs, gamma, rng_seed)
+    rng, delay, inf, rec = _start(len(nodes), seeds, immunised, runs, gamma, rng_seed, blocks)
     log1mb = np.log1p(-min(beta, 1 - 1e-12)) / period  # beta = 1 would give -inf * 0
     for k in range(int(np.ceil(max_loops * period / step))):
         s0, s1 = k * step, (k + 1) * step
-        if not (rec >= s0).any():
+        alive = _alive(inf, rec, s0)
+        u = rng.random((runs, inf.shape[1]))  # drawn every step: common random numbers
+        if len(alive) == 0:
             return Epidemic(inf, rec, period, 0.0)
-        lo = np.maximum(inf + 1, s0)
-        hi = np.minimum(rec, s1 - 1)
+        ia, ra = inf[alive], rec[alive]
+        lo = np.maximum(ia + 1, s0)
+        hi = np.minimum(ra, s1 - 1)
         exposure = np.clip(hi - lo + 1, 0, None).astype(float)  # infectious windows in the step
         p = -np.expm1(log1mb * (exposure @ c))
-        new = (inf == NEVER) & (rng.random(inf.shape) < p)
-        inf[new] = s1 - 1
-        rec[new] = s1 - 1 + delay[new]
+        r, v = np.nonzero((ia == NEVER) & (u[alive % runs] < p))
+        inf[alive[r], v] = s1 - 1
+        rec[alive[r], v] = s1 - 1 + delay[alive[r], v]
     end = max_loops * period
-    return Epidemic(inf, rec, period, float((rec >= end).any(axis=1).mean()))
+    return Epidemic(inf, rec, period, len(_alive(inf, rec, end)) / len(inf))

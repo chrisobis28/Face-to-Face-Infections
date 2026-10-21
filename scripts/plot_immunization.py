@@ -233,6 +233,22 @@ PROP_LABEL = {"kshell": "k-shell", "linkers": "linker-ness", "temporal_reach": "
               "burstiness": "burstiness (T)", "transmissibility": "transmissibility"}
 
 
+def split_half(d: str) -> dict:
+    """Reliability of the per-node roles: Spearman between the estimates from the first and the
+    second half of the runs (a value near 1 means the node ranking is not simulation noise)."""
+    nd = pd.read_parquet(cache.result_path("immunization_nodes"))
+    nd = nd[nd["dataset"] == d]
+    seed = nd[(nd["role"] == "seed") & (nd["outcome"] == "final_size")]
+    half = seed["run"] < seed["run"].max() / 2
+    s = seed.groupby([half, "node"])["value"].mean().unstack(0)
+    blk = nd[nd["outcome"] == "others_infected"]
+    bhalf = blk["run"] < blk["run"].max() / 2
+    m = blk.groupby([bhalf, "role", "node"])["value"].mean()
+    b = {h: m[h]["baseline"] - m[h]["blocked"] for h in (True, False)}
+    return {"split_half_seed": s[True].corr(s[False], method="spearman"),
+            "split_half_blocker": b[True].corr(b[False], method="spearman")}
+
+
 def fig_seed_vs_blocker() -> pd.DataFrame:
     """Holme (2017) / Radicchi & Castellano (2017): a node's value as seed vs as immunisation target."""
     fig = plt.figure(figsize=(11, 7.2))
@@ -255,14 +271,14 @@ def fig_seed_vs_blocker() -> pd.DataFrame:
         top_s = set(t["seed_influence"].nlargest(k).index)
         top_b = set(t["blocking_importance"].nlargest(k).index)
         r = t[["seed_influence", "blocking_importance"]].corr("spearman").iat[0, 1]
-        stats[d] = {"spearman": r, "top10_overlap": len(top_s & top_b) / k}
+        stats[d] = {"spearman": r, "top10_overlap": len(top_s & top_b) / k, **split_half(d)}
         ax.axhline(0, color=MUTED, lw=0.8)
         ax.text(0.98, 0.04, f"Spearman {r:+.2f}\ntop-10 % overlap {len(top_s & top_b)}/{k}", transform=ax.transAxes,
                 ha="right", va="bottom", fontsize=7.5, color="#52514e")
         ax.set_title(DS_LABEL[d])
         ax.set_xlabel("final size when seeded at the node (%)")
         if c == 0:
-            ax.set_ylabel("drop in final size when the\nnode alone is immunised (pp)")
+            ax.set_ylabel("infections among the others prevented\nby immunising only this node (% of N)")
         for role, col in [("seed_influence", "seed"), ("blocking_importance", "blocker")]:
             corr[(DS_LABEL[d], col)] = t[PROPS].corrwith(t[role], method="spearman")
     m = pd.DataFrame(corr)
@@ -278,7 +294,7 @@ def fig_seed_vs_blocker() -> pd.DataFrame:
     ax.set_yticks(range(m.shape[1]), [f"{a}: as {b}" for a, b in m.columns])
     ax.grid(False)
     fig.colorbar(img, ax=ax, fraction=0.02, pad=0.01, label="Spearman ρ")
-    ax.set_title("Which node property predicts each role? (T = temporal property; main setting, 100 runs per node)")
+    ax.set_title("Which node property predicts each role? (T = temporal property; main setting; 100 runs per node as seed, 400 as immunised)")
     fig.suptitle("Good seeds vs good immunisation targets", y=0.99)
     fig.savefig(FIG / "seed_vs_blocker.png", bbox_inches="tight")
     plt.close(fig)
