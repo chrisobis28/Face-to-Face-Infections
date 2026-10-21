@@ -48,9 +48,11 @@ src/f2f/
   temporal_metrics.py stream 3 contact episodes, burstiness, activity and memory
   temporal_nulls.py  stream 3  invariant-preserving time and link shuffles
   prediction.py      stream 3  self-driven temporal-link prediction
+  sir.py             stream 4/6 batched SIR with immunisation, periodic looping, aggregated version
+  immunization.py    stream 6  immunisation strategies, node properties, pruned-network metrics
 scripts/
   download_data.sh, check_data.py, run_static_characterisation.py,
-  run_temporal_characterisation.py
+  run_temporal_characterisation.py, run_immunization.py, plot_immunization.py
 results/             generated tables (git-ignored), figures/ tracked
 ```
 
@@ -101,3 +103,15 @@ exponential memory. We adapt its next-snapshot scores to rank contacts for each 
 parameter is selected on day 0 and compared with an unweighted frequency baseline over the same
 history window. Only links observed before the predicted day are candidates. Results include
 candidate coverage so unseen future links are not silently ignored.
+
+## Stream 6: immunisation (RQ4) and seeds vs immunisation targets (RQ2)
+
+```bash
+python scripts/run_immunization.py --quick   # hospital, 20 runs, ~1 min
+python scripts/run_immunization.py           # everything, ~2 h on a 4-core laptop
+python scripts/plot_immunization.py          # figures/immunization/*.png + markdown tables
+```
+
+Immunise f·N nodes at day 0 with eleven strategies and run SIR (100 runs, shared random numbers)
+on the real, time-shuffled and aggregated networks. Design, references and results:
+see [IMMUNIZATION_RESULTS.md](IMMUNIZATION_RESULTS.md).

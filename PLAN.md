@@ -80,7 +80,7 @@ Needs: loader. Delivers to: shuffles and activity potentials to stream 5; predic
 Needs: loader; centralities and λ1 from stream 2. Delivers to: engine to streams 5 and 6 by day 5.
 
 - ✅Vectorised discrete-time SIR on the contact table with the agreed signature, fixed seeds
-- ⬜ Periodic looping of the recording when the outbreak outlasts it
+- ✅ Periodic looping of the recording when the outbreak outlasts it (`f2f.sir`, batched runs)
 - ✅ Test against the analytical SIR on a complete graph
 - ⬜ SIS on the aggregated weighted graph; empirical threshold vs 1/λ1
 - ⬜ All-seeds sweep: every seed node, 200 runs (100 on the high school), several beta values
@@ -104,11 +104,11 @@ Needs: loader; activity potentials and shuffles from stream 3; engine from strea
 
 Needs: engine from stream 4; centralities from stream 2; predictions from stream 3; surrogate from stream 5.
 
-- ⬜ Intervention operators: immunise a node set, cohorting, shorten the day, isolate after first detected case with delay
-- ⬜ Rankings at 5 / 10 / 20 % budgets from: full history, static aggregate, first 1-2 days, predicted contacts, random
-- ⬜ Equal-cost comparison on the real temporal network with 95 % intervals
+- ✅ Intervention operator: immunise a node set at day 0 (`f2f.sir`, `immunised=`); cohorting, shorter day and isolation dropped after the midterm feedback (immunisation only)
+- ✅ Rankings at 5 / 10 / 15 / 20 / 30 % budgets: 11 strategies (`f2f.immunization`); observation windows dropped after the feedback (immunise at day 0)
+- ✅ Equal-cost comparison on the real, time-shuffled and aggregated networks with paired bootstrap 95 % intervals
 - ⬜ Same comparison on the calibrated surrogate, including what-ifs the recording lacks (act a day earlier)
-- ⬜ RQ4 figure and the one-sentence practical message
+- ✅ RQ4 figures (`figures/immunization/`) and message (IMMUNIZATION_RESULTS.md)
 
 ---
 
