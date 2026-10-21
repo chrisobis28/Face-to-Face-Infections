@@ -13,7 +13,7 @@ Stages (results/<name>.parquet, row format of f2f.cache plus extra columns):
             immunised vs not (400 runs: single-node effects are small). Gives the oracle.
   grid      every setting x dataset x version x strategy x budget, 1 random seed
   seeds5    main setting, real network, 5 random seeds instead of 1
-  seedsets  main setting, real network: each strategy's 10 % set used as the seed set
+  seedsets  main setting, real network: each ranking's top 5 nodes used as the 5 seeds
 Tables: results/immunization_pruned.csv, immunization_curves.parquet, immunization_node_table_<ds>.csv
 
     python scripts/run_immunization.py --quick        # hospital, 20 runs, ~1 min
@@ -44,6 +44,7 @@ PROCESSED = datasets.ROOT / "data" / "processed"
 RUNS = 100
 BLOCK_RUNS_FACTOR = 4  # runs for single-node immunisation = 4 x RUNS
 NODE_CHUNK = 12
+SEEDSET_K = 5  # same number of seeds as the seeds5 stage
 
 
 @lru_cache(maxsize=None)
@@ -156,11 +157,10 @@ def grid_task(setting: str, key: str, version: str, strategies: list[str], n_see
 def seedset_task(key: str, runs: int) -> pd.DataFrame:
     beta, gamma = SETTINGS[MAIN]
     d = data(key)
-    k = round(0.10 * len(d["nodes"]))
-    masks = [im.immunisation_masks(st, k, scores(key, MAIN), d["matrix"], runs, RNG) for st in im.STRATEGIES]
+    masks = [im.immunisation_masks(st, SEEDSET_K, scores(key, MAIN), d["matrix"], runs, RNG) for st in im.STRATEGIES]
     eps = epidemic(key, "real", beta, gamma, seeds=np.vstack(masks), runs=runs, blocks=len(masks))
     return pd.concat(rows(ep, dataset=key, version="real", beta=beta, gamma=gamma, seed=-1, setting=MAIN,
-                          strategy=st, budget=0.10) for st, ep in zip(im.STRATEGIES, eps.split(len(masks))))
+                          strategy=st, budget=0.0) for st, ep in zip(im.STRATEGIES, eps.split(len(masks))))
 
 
 def node_table(key: str) -> pd.DataFrame:

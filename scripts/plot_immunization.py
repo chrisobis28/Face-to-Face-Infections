@@ -70,8 +70,19 @@ def efficiency(df: pd.DataFrame, outcome: str = "final_size", n_boot: int = 1000
     out = pd.DataFrame(rows)
     best = out[out["strategy"] != "oracle"].groupby(keys + ["budget"])["reduction"].max().rename("best")
     out = out.merge(best, left_on=keys + ["budget"], right_index=True)
-    out["relative"] = out["reduction"] / out["best"]
+    out["regret"] = (out["best"] - out["reduction"]) * 100  # pp short of the best strategy in the cell
     return out
+
+
+def regret_table(eff: pd.DataFrame) -> pd.DataFrame:
+    """Minimax regret (Savage): per strategy, the largest and the mean shortfall (pp) from the
+    best strategy over all cells (setting x dataset x version), per budget. The general strategy
+    has the smallest largest shortfall. Unlike ratios, saturated cells (no strategy beats
+    random) add only small regrets instead of noise."""
+    e = eff[eff["strategy"] != "oracle"]
+    t = e.groupby(["strategy", "budget"])["regret"].agg(["max", "mean"]).unstack("budget")
+    t.columns = [f"{s} f={b:.0%}" for s, b in t.columns]
+    return t.sort_values("max f=10%")
 
 
 def fig_budget_curves(eff: pd.DataFrame) -> None:
@@ -87,20 +98,20 @@ def fig_budget_curves(eff: pd.DataFrame) -> None:
                 g = cell[cell["strategy"] == st].sort_values("budget")
                 if g.empty:
                     continue
-                kw = dict(lw=1.5, **STYLE[st])
+                kw = {"lw": 1.5, **STYLE[st]}
                 ax.plot(np.r_[0, g["budget"]] * 100, np.r_[1, 1 - g["reduction"]], **kw)
             base = cell["baseline"].iloc[0] if len(cell) else np.nan
             ax.set_ylim(0, 1.1)
             ax.axhline(1, color=MUTED, lw=0.8)
-            ax.text(0.98, 0.04, f"no immunisation: {base:.0%} infected", transform=ax.transAxes,
-                    ha="right", va="bottom", color="#52514e", fontsize=7.5)
+            ax.text(0.98, 0.995, f"no immunisation: {base:.0%} infected", transform=ax.transAxes,
+                    ha="right", va="top", color="#52514e", fontsize=7.5)
             if r == 0:
                 ax.set_title(DS_LABEL[d])
             if c == 0:
                 ax.set_ylabel(f"{SETTINGS[s]}\nfinal size / no immunisation")
             if r == len(settings) - 1:
                 ax.set_xlabel("immunised nodes f (%)")
-    handles = [Line2D([0], [0], lw=1.5, **STYLE[s]) for s in ORDER]
+    handles = [Line2D([0], [0], **{"lw": 1.5, **STYLE[s]}) for s in ORDER]
     fig.legend(handles, [lbl(s) for s in ORDER], loc="lower center", ncol=6, frameon=False)
     fig.suptitle("Outbreak size after immunising a fraction f of nodes at day 0 (real temporal network, 100 runs)")
     fig.tight_layout(rect=(0, 0.07, 1, 0.97))
@@ -108,55 +119,52 @@ def fig_budget_curves(eff: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def fig_strategy_table(eff: pd.DataFrame) -> pd.DataFrame:
-    """Zhang et al. (2022) Tables 2-5 as a heat map: reduction at f = 10 %, best per column in bold,
-    colour = fraction of the best strategy's reduction; last column = worst case (general strategy)."""
+def fig_strategy_table(eff: pd.DataFrame) -> None:
+    """Zhang et al. (2022) Tables 2-5 as a heat map: reduction (%) at f = 10 % per setting x version x
+    dataset, best per column in bold; colour = shortfall from the best strategy (regret, pp).
+    Last two columns: largest and mean regret, which select the general strategy."""
     e = eff[eff["budget"] == F_MAIN].copy()
     e["col"] = e["setting"] + "|" + e["version"] + "|" + e["dataset"]
-    cols = [f"{s}|real|{d}" for s in SETTINGS for d in DATASETS]
-    cols += [f"{s}|{v}|{d}" for s in ["low", MAIN] for v in ["time_shuffled", "aggregated"] for d in DATASETS]
+    cols = [f"{s}|{v}|{d}" for v in VERSION_LABEL for s in SETTINGS for d in DATASETS]
     cols = [c for c in cols if c in set(e["col"])]
-    rel = e.pivot_table(index="strategy", columns="col", values="relative")[cols]
-    red = e.pivot_table(index="strategy", columns="col", values="reduction")[cols]
-    worst = rel.drop(index="oracle", errors="ignore").min(axis=1)
-    order = list(worst.sort_values(ascending=False).index) + (["oracle"] if "oracle" in rel.index else [])
-    rel, red = rel.loc[order], red.loc[order]
-    rel["worst case"] = rel.drop(index="oracle", errors="ignore").min(axis=1)
-    red["worst case"] = np.nan
+    reg = e.pivot_table(index="strategy", columns="col", values="regret")[cols]
+    red = e.pivot_table(index="strategy", columns="col", values="reduction")[cols] * 100
+    summary = reg.drop(index="oracle", errors="ignore").agg(["max", "mean"], axis=1)
+    order = list(summary["max"].sort_values().index) + (["oracle"] if "oracle" in reg.index else [])
+    reg, red = reg.loc[order], red.loc[order]
+    reg[["largest regret", "mean regret"]] = summary.reindex(order).to_numpy()
+    data = reg.to_numpy(dtype=float)
+    ncol = len(cols)
 
-    fig, ax = plt.subplots(figsize=(0.62 * rel.shape[1] + 2.6, 0.36 * rel.shape[0] + 2.2))
-    data = rel.to_numpy(dtype=float)
-    im_ = ax.imshow(np.clip(data, 0, 1), cmap=matplotlib.colors.LinearSegmentedColormap.from_list(
-        "blue", ["#f0efec", "#86b6ef", "#2a78d6", "#104281"]), vmin=0, vmax=1, aspect="auto")
-    best_row = np.nanargmax(np.where(np.isin(rel.index, ["oracle"])[:, None], -np.inf, data[:, :-1]), axis=0)
+    fig, ax = plt.subplots(figsize=(0.42 * data.shape[1] + 2.8, 0.36 * data.shape[0] + 2.4))
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("seq", ["#f0efec", "#86b6ef", "#2a78d6", "#104281"])
+    img = ax.imshow(np.clip(data, 0, 30), cmap=cmap, vmin=0, vmax=30, aspect="auto")
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            v = data[i, j] if j == data.shape[1] - 1 else red.iat[i, j]
+            v = red.iat[i, j] if j < ncol else data[i, j]
             if np.isnan(v):
                 continue
-            txt = f"{v:.2f}" if j == data.shape[1] - 1 else f"{v * 100:.0f}"
-            bold = j < data.shape[1] - 1 and best_row[j] == i
-            ax.text(j, i, txt, ha="center", va="center", fontsize=7.5, fontweight="bold" if bold else "normal",
-                    color="white" if data[i, j] > 0.6 else INK)
+            bold = j < ncol and data[i, j] == 0
+            ax.text(j, i, f"{v:.0f}" if j < ncol else f"{v:.1f}", ha="center", va="center", fontsize=7,
+                    fontweight="bold" if bold else "normal", color="white" if data[i, j] > 18 else INK)
     ax.set_yticks(range(len(order)), [lbl(s) for s in order])
-    ax.set_xticks(range(rel.shape[1]),
-                  [DS_LABEL[c.split("|")[2]].replace(" school", "") if "|" in c else c for c in rel.columns],
-                  rotation=60, ha="right")
-    groups = [(c.split("|")[0], c.split("|")[1]) for c in cols]
-    for j, (g0, g1) in enumerate(groups):
-        if j % 3 == 0:
-            ax.text(j + 1, -0.9, f"{g0}: {VERSION_LABEL[g1]}", ha="center", va="bottom", fontsize=7.5)
-            if j:
-                ax.axvline(j - 0.5, color="white", lw=2)
-    ax.axvline(len(cols) - 0.5, color="white", lw=3)
+    ax.set_xticks(range(data.shape[1]),
+                  [DS_LABEL[c.split("|")[2]].split()[0][:4] + "." for c in cols] + ["largest", "mean"],
+                  rotation=90)
+    for j in range(0, ncol, 3):
+        s_, v_, _ = cols[j].split("|")
+        ax.text(j + 1, -0.8, f"{v_.replace('_', '-')}\n{s_}", ha="center", va="bottom", fontsize=6.5)
+        if j:
+            ax.axvline(j - 0.5, color="white", lw=1.5 if j % 9 else 3)
+    ax.axvline(ncol - 0.5, color="white", lw=3)
     ax.grid(False)
-    ax.set_title("Final-size reduction (%) at f = 10 %; colour = share of the best strategy's reduction\n"
-                 "bold = best per column; rows sorted by worst case\n\n", fontsize=9)
-    fig.colorbar(im_, ax=ax, fraction=0.025, pad=0.01, label="reduction / best reduction")
+    ax.set_title("Final-size reduction (%) at f = 10 % (bold = best in column); colour = shortfall from the best "
+                 "strategy (pp)\nlast two columns: largest and mean shortfall over all 27 columns (minimax regret)\n\n",
+                 fontsize=9)
+    fig.colorbar(img, ax=ax, fraction=0.02, pad=0.01, label="shortfall from best (pp, capped at 30)")
     fig.tight_layout()
     fig.savefig(FIG / "strategy_table.png")
     plt.close(fig)
-    return rel
 
 
 def fig_curves() -> None:
@@ -170,7 +178,7 @@ def fig_curves() -> None:
             ax = axes[r, c]
             for st in show:
                 g = cur[(cur["setting"] == s) & (cur["dataset"] == d) & (cur["strategy"] == st)]
-                kw = dict(color=INK, ls="-", lw=1.8) if st == "none" else dict(lw=1.5, **STYLE[st])
+                kw = dict(color=INK, ls="-", lw=1.8) if st == "none" else {"lw": 1.5, **STYLE[st]}
                 ax.plot(g["t_h"] / 24, g["prevalence"] * 100, **kw)
             ax.set_xlim(0, None)
             if r == 0:
@@ -179,7 +187,7 @@ def fig_curves() -> None:
                 ax.set_ylabel(f"{SETTINGS[s]}\ninfectious (% of nodes)")
             if r == len(settings) - 1:
                 ax.set_xlabel("time (days, recording looped)")
-    handles = [Line2D([0], [0], color=INK, lw=1.8)] + [Line2D([0], [0], lw=1.5, **STYLE[s]) for s in show[1:]]
+    handles = [Line2D([0], [0], color=INK, lw=1.8)] + [Line2D([0], [0], **{"lw": 1.5, **STYLE[s]}) for s in show[1:]]
     fig.legend(handles, ["no immunisation"] + [lbl(s) for s in show[1:]], loc="lower center", ncol=7, frameon=False)
     fig.suptitle("Mean prevalence with 10 % of nodes immunised (real temporal network, 100 runs)")
     fig.tight_layout(rect=(0, 0.06, 1, 0.97))
@@ -201,8 +209,8 @@ def fig_pruned(eff: pd.DataFrame) -> pd.DataFrame:
     e = eff[(eff["setting"] == MAIN) & (eff["version"] == "real") & (eff["budget"] == F_MAIN)]
     pr = pr.merge(e[["dataset", "strategy", "reduction"]], on=["dataset", "strategy"])
     props = [("lambda1_rel", "λ1(W*) / λ1(W)"), ("modularity_gain", "modularity(W*) − modularity(W)"),
-             ("lcc", "largest component (fraction of N)"), ("contacts_removed", "contacts removed (fraction)")]
-    fig, axes = plt.subplots(1, 4, figsize=(11, 3.3), sharey=True)
+             ("contacts_removed", "contacts removed (fraction)")]
+    fig, axes = plt.subplots(1, 3, figsize=(10, 3.6), sharey=True)
     rho = {}
     for ax, (p, name) in zip(axes, props):
         for d in DATASETS:
@@ -211,16 +219,15 @@ def fig_pruned(eff: pd.DataFrame) -> pd.DataFrame:
             t = g[g["strategy"] == "transmissibility"]
             ax.scatter(t[p], t["reduction"] * 100, s=90, facecolor="none", edgecolor=INK, lw=1.2, zorder=4)
             rho[(d, p)] = g[[p, "reduction"]].corr("spearman").iat[0, 1]
-        ax.set_xlabel(name)
-        ax.text(0.02, 0.98, "\n".join(f"ρ {DS_LABEL[d].split()[0][:4]}. {rho[(d, p)]:+.2f}" for d in DATASETS),
-                transform=ax.transAxes, va="top", fontsize=7.5, color="#52514e")
+        ax.set_xlabel(name + "\nρ: " + ", ".join(f"{DS_LABEL[d].split()[0][:4]}. {rho[(d, p)]:+.2f}" for d in DATASETS))
     axes[0].set_ylabel("final-size reduction at f = 10 % (%)")
     handles = [Line2D([0], [0], marker="o", ls="", color=DS_COLOR[d], markeredgecolor="white") for d in DATASETS]
     handles.append(Line2D([0], [0], marker="o", ls="", markerfacecolor="none", markeredgecolor=INK, markersize=9))
     fig.legend(handles, [DS_LABEL[d] for d in DATASETS] + ["transmissibility (proposed)"],
                loc="lower center", ncol=4, frameon=False)
-    fig.suptitle("Why strategies work: the aggregated network left after immunising 10 % (one dot per strategy; ρ = Spearman)")
-    fig.tight_layout(rect=(0, 0.08, 1, 0.95))
+    fig.suptitle("Why strategies work: the aggregated network left after immunising 10 % (one dot per strategy;"
+                 " ρ = Spearman)\nThe largest component always keeps every remaining node that has contacts, so it is not shown.", fontsize=9)
+    fig.tight_layout(rect=(0, 0.08, 1, 0.93))
     fig.savefig(FIG / "pruned_network.png")
     plt.close(fig)
     return pd.DataFrame(rho, index=["spearman"]).T
@@ -339,17 +346,19 @@ def fig_seeds_and_sets(eff: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             if st in fs.index:
                 ax.annotate(lbl(st).split(" (")[0], (red[st], fs[st]), xytext=(4, 3), textcoords="offset points",
                             fontsize=7, color="#52514e")
-        ax.text(0.98, 0.04, f"Spearman {r_fs:+.2f}", transform=ax.transAxes, ha="right", va="bottom",
+        ax.text(0.02, 0.98, f"Spearman {r_fs:+.2f}", transform=ax.transAxes, ha="left", va="top",
                 fontsize=7.5, color="#52514e")
-        ax.set_xlabel("reduction when the set is immunised (%)")
+        ax.set_xlabel("reduction, top 10 % immunised (%)")
         if c == 0:
-            ax.set_ylabel("final size (%) when the same\nset is the seed set")
+            ax.set_ylabel("final size (%) when the ranking's\ntop 5 nodes are the 5 seeds")
     handles = [Line2D([0], [0], marker="o", ls="", color=INK), Line2D([0], [0], marker="o", ls="",
                markerfacecolor="white", markeredgecolor=INK)]
-    axes[0, 2].legend(handles, ["1 random seed", "5 random seeds"], loc="lower right", frameon=False, fontsize=7.5)
+    fig.legend(handles, ["1 random seed", "5 random seeds"], loc="upper center", bbox_to_anchor=(0.5, 0.955),
+               ncol=2, frameon=False, fontsize=8)
     axes[0, 0].set_ylabel("")
-    fig.suptitle("Top: immunisation with 1 vs 5 random seeds.  Bottom: is the best set to immunise also the best seed set?")
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.suptitle("Top: immunisation with 1 vs 5 random seeds.  Bottom: do rankings that find good immunisation"
+                 " targets also find good seeds?")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(FIG / "seeds_and_sets.png")
     plt.close(fig)
     return e5, pd.DataFrame(sets).T
@@ -370,14 +379,14 @@ def main():
     eff = efficiency(pd.read_parquet(cache.result_path("immunization_grid")))
     cache.save_table(eff, "immunization_efficiency")
     fig_budget_curves(eff)
-    rel = fig_strategy_table(eff)
+    fig_strategy_table(eff)
     fig_curves()
     rho = fig_pruned(eff)
     stats = fig_seed_vs_blocker()
     e5, sets = fig_seeds_and_sets(eff)
 
-    print("\n## worst-case relative efficiency (f = 10 %)\n")
-    print(md(rel[["worst case"]].rename_axis("strategy")))
+    print("\n## minimax regret: shortfall (pp) from the best strategy over all 27 cells\n")
+    print(md(regret_table(eff).rename_axis("strategy"), fmt="{:.1f}"))
     main_tab = eff[(eff["setting"] == MAIN) & (eff["version"] == "real") & (eff["budget"] == F_MAIN)]
     main_tab = main_tab.assign(cell=lambda x: [f"{r*100:.0f} [{lo*100:.0f}, {hi*100:.0f}]" for r, lo, hi in
                                               zip(x["reduction"], x["ci_lo"], x["ci_hi"])])
