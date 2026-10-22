@@ -93,11 +93,11 @@ Needs: loader; centralities and λ1 from stream 2. Delivers to: engine to stream
 
 Needs: loader; activity potentials and shuffles from stream 3; engine from stream 4. Delivers to: surrogate to stream 6.
 
-- ⬜ Activity-driven network generator in the contact-table format
-- ⬜ Calibration by least squares over m and η to the observed degree distribution and daily contact volume on calibration days
-- ⬜ Least-squares surface figure
-- ⬜ Validation on held-out days: degree distribution, contact volume, SIR outbreak
-- ⬜ Same SIR on real, time-shuffled, aggregated and surrogate; final size vs beta (RQ3 figure)
+- ✅ Activity-driven network generator in the contact-table format
+- ✅ Calibration by least squares over m and η to the observed degree distribution and daily contact volume on calibration days
+- ✅ Least-squares surface figure
+- ✅ Validation on held-out days: degree distribution, contact volume, SIR outbreak
+- ✅ Same SIR on real, time-shuffled, aggregated and surrogate; final size vs beta (RQ3 figure)
 - ⬜ Validated surrogate contact sequence written for stream 6
 
 ## Stream 6: Interventions (RQ4b)
