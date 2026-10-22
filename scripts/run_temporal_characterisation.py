@@ -65,15 +65,20 @@ def temporal_figure(plot_data: dict) -> None:
     styles = {
         "real": ("C3", "-"),
         "time shuffled": ("C0", "--"),
-        "episode shuffled": ("0.25", "-."),
         "link shuffled": ("C2", ":"),
     }
     for col, key in enumerate(datasets_order):
         for label, version in plot_data[key].items():
+            if label not in styles:
+                continue
             color, linestyle = styles[label]
             gaps = tm.inter_contact_times(tm.contact_episodes(version)) / 60
             x, y = _ccdf(gaps)
-            axes[0, col].loglog(x, y, label=label, color=color, linestyle=linestyle)
+            median_gap = float(np.median(gaps))
+            axes[0, col].semilogx(
+                x, y, label=f"{label} (median {median_gap:.1f} min)",
+                color=color, linestyle=linestyle,
+            )
             memory = tm.memory_curve(version, max_lag=12, bin_s=300)
             axes[1, col].plot(
                 memory["lag_minutes"], memory["autocorrelation"],
@@ -81,11 +86,12 @@ def temporal_figure(plot_data: dict) -> None:
             )
         axes[0, col].set_title(key.replace("_", " "))
         axes[0, col].set_xlabel("within-day inter-contact time (min)")
+        axes[0, col].set_ylim(0, 1.02)
+        axes[0, col].legend(fontsize=8, loc="upper right")
         axes[1, col].set_xlabel("lag (min)")
         if col == 0:
-            axes[0, col].set_ylabel("Pr[gap >= x]")
+            axes[0, col].set_ylabel("fraction of gaps at least x")
             axes[1, col].set_ylabel("link-activity autocorrelation")
-            axes[0, col].legend()
             axes[1, col].legend()
     fig.suptitle("Temporal burstiness and memory compared with invariant-preserving null models")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
