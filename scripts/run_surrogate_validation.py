@@ -127,19 +127,17 @@ def plot_validation(plot_data, dataset_key):
     # FIRST PLOT: DEGREE DISTRIBUTION CDF
     ax = axes[0]
 
-    ax.step(
+    ax.plot(
         degree_grid,
         observed_mean_cdf,
-        where="post",
         color="firebrick",
         linewidth=2,
         label="Observed",
     )
 
-    ax.step(
+    ax.plot(
         degree_grid,
         generated_mean_cdf,
-        where="post",
         color="navy",
         linewidth=2,
         label="Surrogate mean",
@@ -148,7 +146,7 @@ def plot_validation(plot_data, dataset_key):
     ax.set(
         xlabel="Daily Distinct Partners, k",
         ylabel="Mean Fraction of People with degree ≤ k",
-        title="Average Daily Degree Distribution",
+        title="Average Daily Degree CDF",
         ylim=(0, 1.02),
     )
 
@@ -188,17 +186,18 @@ def plot_validation(plot_data, dataset_key):
 
 if __name__ == "__main__":
 
-    dataset_key = "primary_school"
+    dataset_keys = ["hospital", "primary_school","high_school"]
 
-    validation_table, plot_data, metadata, surrogates = run_validation(dataset_key=dataset_key, repeats=5)
+    for key in dataset_keys:
+        validation_table, plot_data, metadata, surrogates = run_validation(dataset_key=key, repeats=10)
 
-    results_dir = ROOT / "results/surrogate_validation"
+        results_dir = ROOT / "results/surrogate_validation"
 
-    results_dir.mkdir(parents=True, exist_ok=True)
+        results_dir.mkdir(parents=True, exist_ok=True)
 
-    validation_table.to_csv(results_dir / f"validation_{dataset_key}.csv", index=False)
+        validation_table.to_csv(results_dir / f"validation_{key}.csv", index=False)
 
-    metadata_path = results_dir / f"metadata_{dataset_key}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2),encoding="utf-8")
+        metadata_path = results_dir / f"metadata_{key}.json"
+        metadata_path.write_text(json.dumps(metadata, indent=2),encoding="utf-8")
 
-    plot_validation(plot_data, dataset_key)
+        plot_validation(plot_data, key)

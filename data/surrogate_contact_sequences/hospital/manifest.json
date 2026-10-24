@@ -1,0 +1,131 @@
+{
+  "dataset": "hospital",
+  "m": 6,
+  "eta": 0.1921624627405396,
+  "calibration_days": [
+    0,
+    1,
+    2
+  ],
+  "validation_days": [
+    3,
+    4
+  ],
+  "calibration_file": "/home/sbafsari/Face-to-Face-Infections/results/calibration_hospital.csv",
+  "network_seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+  ],
+  "betas": [
+    0.01,
+    0.02,
+    0.03,
+    0.04,
+    0.05,
+    0.06,
+    0.07,
+    0.08,
+    0.09,
+    0.1
+  ],
+  "gamma": 0.0005,
+  "runs_per_network_repeat": 100,
+  "max_loops": 100,
+  "epidemic_seeds": [
+    400,
+    401,
+    402,
+    403,
+    404,
+    405,
+    406,
+    407,
+    408,
+    409
+  ],
+  "shuffle_seeds": [
+    300,
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309
+  ],
+  "final_size_denominator": 75,
+  "aggregated_step_windows": 1,
+  "sir_surrogate_validation": {
+    "mae_pp": 54.132000000000005,
+    "rmse_pp": 37.60454786680285
+  },
+  "observation_start_t": 216080,
+  "observation_end_t": 347500,
+  "window_s": 20,
+  "period_windows": 6572,
+  "schedule_conditioning": "Observed held-out daily start/end times",
+  "replay": "Periodic repetition of the whole held-out interval",
+  "nodes_file": "nodes.csv",
+  "surrogate_files": [
+    {
+      "network_seed": 100,
+      "file": "surrogate_seed_100.csv",
+      "contact_rows": 7498
+    },
+    {
+      "network_seed": 101,
+      "file": "surrogate_seed_101.csv",
+      "contact_rows": 7174
+    },
+    {
+      "network_seed": 102,
+      "file": "surrogate_seed_102.csv",
+      "contact_rows": 7253
+    },
+    {
+      "network_seed": 103,
+      "file": "surrogate_seed_103.csv",
+      "contact_rows": 7464
+    },
+    {
+      "network_seed": 104,
+      "file": "surrogate_seed_104.csv",
+      "contact_rows": 8027
+    },
+    {
+      "network_seed": 105,
+      "file": "surrogate_seed_105.csv",
+      "contact_rows": 7266
+    },
+    {
+      "network_seed": 106,
+      "file": "surrogate_seed_106.csv",
+      "contact_rows": 7332
+    },
+    {
+      "network_seed": 107,
+      "file": "surrogate_seed_107.csv",
+      "contact_rows": 7354
+    },
+    {
+      "network_seed": 108,
+      "file": "surrogate_seed_108.csv",
+      "contact_rows": 7206
+    },
+    {
+      "network_seed": 109,
+      "file": "surrogate_seed_109.csv",
+      "contact_rows": 7314
+    }
+  ]
+}
