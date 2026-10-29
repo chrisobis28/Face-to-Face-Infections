@@ -268,8 +268,7 @@ def fig_seed_vs_blocker() -> pd.DataFrame:
         ax = fig.add_subplot(gs[0, c])
         if d == "hospital":
             for role, g in t.groupby("group"):
-                ax.scatter(g["seed_influence"] * 100, g["blocking_importance"] * 100, s=22, marker=role_marker[role],
-                           color=role_color[role], edgecolor="white", lw=0.5, label=role)
+                ax.scatter(g["seed_influence"] * 100, g["blocking_importance"] * 100, s=22, edgecolor="white", lw=0.5, label=role)
             ax.legend(loc="upper left", fontsize=7, frameon=False, handletextpad=0.1)
         else:
             ax.scatter(t["seed_influence"] * 100, t["blocking_importance"] * 100, s=14, color=DS_COLOR[d],
@@ -283,10 +282,10 @@ def fig_seed_vs_blocker() -> pd.DataFrame:
         ax.text(0.98, 0.04, f"Spearman {r:+.2f}\ntop-10 % overlap {len(top_s & top_b)}/{k}", transform=ax.transAxes,
                 ha="right", va="bottom", fontsize=7.5, color="#52514e")
         ax.set_title(DS_LABEL[d])
-        ax.set_xlabel("final size when seeded at the node (%)")
+        ax.set_xlabel("final size %")
         if c == 0:
-            ax.set_ylabel("infections among the others prevented\nby immunising only this node (% of N)")
-        for role, col in [("seed_influence", "seed"), ("blocking_importance", "blocker")]:
+            ax.set_ylabel("infections prevented %")
+        for role, col in [("seed_influence", "seed"), ("blocking_importance", "target")]:
             corr[(DS_LABEL[d], col)] = t[PROPS].corrwith(t[role], method="spearman")
     m = pd.DataFrame(corr)
     ax = fig.add_subplot(gs[1, :])
@@ -301,7 +300,7 @@ def fig_seed_vs_blocker() -> pd.DataFrame:
     ax.set_yticks(range(m.shape[1]), [f"{a}: as {b}" for a, b in m.columns])
     ax.grid(False)
     fig.colorbar(img, ax=ax, fraction=0.02, pad=0.01, label="Spearman ρ")
-    ax.set_title("Which node property predicts each role? (T = temporal property; main setting; 100 runs per node as seed, 400 as immunised)")
+    # ax.set_title("Which node property predicts each role? (T = temporal property; main setting; 100 runs per node as seed, 400 as immunised)")
     fig.suptitle("Good seeds vs good immunisation targets", y=0.99)
     fig.savefig(FIG / "seed_vs_blocker.png", bbox_inches="tight")
     plt.close(fig)
@@ -378,36 +377,36 @@ def main():
     FIG.mkdir(parents=True, exist_ok=True)
     eff = efficiency(pd.read_parquet(cache.result_path("immunization_grid")))
     cache.save_table(eff, "immunization_efficiency")
-    fig_budget_curves(eff)
-    fig_strategy_table(eff)
-    fig_curves()
-    rho = fig_pruned(eff)
+    # fig_budget_curves(eff)
+    # fig_strategy_table(eff)
+    # fig_curves()
+    # rho = fig_pruned(eff)
     stats = fig_seed_vs_blocker()
-    e5, sets = fig_seeds_and_sets(eff)
+    # e5, sets = fig_seeds_and_sets(eff)
 
-    print("\n## minimax regret: shortfall (pp) from the best strategy over all 27 cells\n")
-    print(md(regret_table(eff).rename_axis("strategy"), fmt="{:.1f}"))
-    main_tab = eff[(eff["setting"] == MAIN) & (eff["version"] == "real") & (eff["budget"] == F_MAIN)]
-    main_tab = main_tab.assign(cell=lambda x: [f"{r*100:.0f} [{lo*100:.0f}, {hi*100:.0f}]" for r, lo, hi in
-                                              zip(x["reduction"], x["ci_lo"], x["ci_hi"])])
-    print("\n## main setting, real network, f = 10 %: reduction % [95% CI]\n")
-    print(md(main_tab.pivot(index="strategy", columns="dataset", values="cell")[DATASETS].loc[
-        [s for s in ORDER if s in set(main_tab["strategy"])]], fmt="{}"))
-    for name, outcome in [("peak", "peak"), ("peak time (h)", "peak_time_h")]:
-        g = pd.read_parquet(cache.result_path("immunization_grid"))
-        g = g[(g["setting"] == MAIN) & (g["version"] == "real") & (g["outcome"] == outcome)
-              & (g["budget"].isin([0.0, F_MAIN]))].groupby(["strategy", "dataset"])["value"].mean().unstack()[DATASETS]
-        print(f"\n## main setting, real network, mean {name} (none vs f = 10 %)\n")
-        print(md(g.loc[["none"] + [s for s in ORDER if s in g.index]], fmt="{:.3f}" if outcome == "peak" else "{:.1f}"))
-    print("\n## pruned network: Spearman(property, reduction) across strategies\n")
-    print(md(rho.unstack(0)))
-    print("\n## seed vs blocker per node\n")
-    print(md(stats))
-    print("\n## 5 seeds: reduction at f = 10 %\n")
-    t5 = e5[e5["budget"] == F_MAIN].pivot(index="strategy", columns="dataset", values="reduction")[DATASETS]
-    print(md(t5.loc[[s for s in ORDER if s in t5.index]] * 100, fmt="{:.0f}"))
-    print("\n## immunisation sets as seed sets\n")
-    print(md(sets.T, fmt="{:+.2f}"))
+    # print("\n## minimax regret: shortfall (pp) from the best strategy over all 27 cells\n")
+    # print(md(regret_table(eff).rename_axis("strategy"), fmt="{:.1f}"))
+    # main_tab = eff[(eff["setting"] == MAIN) & (eff["version"] == "real") & (eff["budget"] == F_MAIN)]
+    # main_tab = main_tab.assign(cell=lambda x: [f"{r*100:.0f} [{lo*100:.0f}, {hi*100:.0f}]" for r, lo, hi in
+    #                                           zip(x["reduction"], x["ci_lo"], x["ci_hi"])])
+    # print("\n## main setting, real network, f = 10 %: reduction % [95% CI]\n")
+    # print(md(main_tab.pivot(index="strategy", columns="dataset", values="cell")[DATASETS].loc[
+    #     [s for s in ORDER if s in set(main_tab["strategy"])]], fmt="{}"))
+    # for name, outcome in [("peak", "peak"), ("peak time (h)", "peak_time_h")]:
+    #     g = pd.read_parquet(cache.result_path("immunization_grid"))
+    #     g = g[(g["setting"] == MAIN) & (g["version"] == "real") & (g["outcome"] == outcome)
+    #           & (g["budget"].isin([0.0, F_MAIN]))].groupby(["strategy", "dataset"])["value"].mean().unstack()[DATASETS]
+    #     print(f"\n## main setting, real network, mean {name} (none vs f = 10 %)\n")
+    #     print(md(g.loc[["none"] + [s for s in ORDER if s in g.index]], fmt="{:.3f}" if outcome == "peak" else "{:.1f}"))
+    # print("\n## pruned network: Spearman(property, reduction) across strategies\n")
+    # print(md(rho.unstack(0)))
+    # print("\n## seed vs blocker per node\n")
+    # print(md(stats))
+    # print("\n## 5 seeds: reduction at f = 10 %\n")
+    # t5 = e5[e5["budget"] == F_MAIN].pivot(index="strategy", columns="dataset", values="reduction")[DATASETS]
+    # print(md(t5.loc[[s for s in ORDER if s in t5.index]] * 100, fmt="{:.0f}"))
+    # print("\n## immunisation sets as seed sets\n")
+    # print(md(sets.T, fmt="{:+.2f}"))
 
 
 if __name__ == "__main__":

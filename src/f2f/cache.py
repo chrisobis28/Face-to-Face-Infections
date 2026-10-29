@@ -41,7 +41,7 @@ def validate(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def result_path(experiment: str) -> Path:
-    return RESULTS_DIR / f"{experiment}.parquet"
+    return RESULTS_DIR / f"data_s/{experiment}.parquet"
 
 
 def save_result(df: pd.DataFrame, experiment: str, append: bool = False) -> Path:
